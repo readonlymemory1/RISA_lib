@@ -12,7 +12,4 @@ class train_tool:
         w2i = {w: i for i, w in enumerate(self.word_list)}
         return w2i
     def i2w(self):
-        w2i = {i:w for w, i in enumerate(self.word_list)}
-tt = train_tool("don't go gentle into that good night")
-print(tt.w2i())
-        
+        i2w = {i:w for w, i in enumerate(self.word_list)}
