@@ -7,8 +7,7 @@ import re
 from Sam_train import train_tool
 
 # 시계열 데이터 생성 (간단한 예제)
-sentence_data = '''
-Do not go gentle into that good night,
+sentence_data = '''Do not go gentle into that good night,
 Old age should burn and rave at close of day;
 Rage, rage against the dying of the light.
 
@@ -34,15 +33,26 @@ Do not go gentle into that good night.
 Rage, rage against the dying of the light.
 '''
 
-cleaned_text = re.sub(r'[^a-zA-Z0-9]', '', sentence_data)
+sentence_data = re.sub(r'[^a-zA-Z0-9 ]', ' ', sentence_data).lower()
 
-tools = train_tool(cleaned_text)
+tools = train_tool(sentence_data)
 index2word = tools.i2w()
 word2index = tools.w2i()
 
-incoder = lambda x:word2index[x]
+data_split = sentence_data.split()
 
-input_seq_length = 10  # 입력 시퀀스 길이
+def incoder(x):
+    data_split = x.split()
+    data = []
+    for i in range(len(data_split)):
+        data.append(word2index[data_split[i]])
+    return data
+decoder = lambda x:index2word[x]
+
+data = incoder(sentence_data)
+print(data)
+
+input_seq_length = 5  # 입력 시퀀스 길이
 output_seq_length = 1  # 출력 시퀀스 길이
 
 # 데이터를 입력 시퀀스와 출력 시퀀스로 변환
@@ -92,11 +102,11 @@ input_size = 1
 hidden_size = 64
 output_size = 1
 model = LSTMTimeSeriesModel(input_size, hidden_size, output_size)
-criterion = nn.L1Loss()
-optimizer = optim.SGD(model.parameters(), lr=0.1)
+criterion = nn.MSELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
 loss_item = []
 # 모델 훈련
-epochs = 1000
+epochs = 100
 for epoch in range(epochs):
     for inputs, targets in dataloader:
         optimizer.zero_grad()
@@ -104,14 +114,18 @@ for epoch in range(epochs):
         loss = criterion(outputs, targets.unsqueeze(-1))
         loss.backward()
         optimizer.step()
-        if epoch%50==0:
+        if epoch%10==0:
             print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item()}')
             loss_item.append(loss.item())
 
 
 plt.plot(loss_item)
 plt.show()
+
+a = "do not go gentle into "
+incoding = incoder(a)
 # 훈련된 모델로 예측 수행
-input_seq = torch.tensor([11, 12, 13, 14, 15], dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
+input_seq = torch.tensor(incoding, dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
 predicted_output = model(input_seq)
-print("Predicted output:", predicted_output)
+# output = predicted_output.softmax(-1).argmax(-1).tolist()
+print("Predicted output:", decoder(round(predicted_output.squeeze().tolist())))
