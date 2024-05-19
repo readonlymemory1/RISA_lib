@@ -84,13 +84,15 @@ class LSTMTimeSeriesModel(nn.Module):
         super(LSTMTimeSeriesModel, self).__init__()
         self.lstm1 = nn.LSTM(input_size, hidden_size, batch_first=True)
         # self.lstm2 = nn.LSTM(hidden_size, hidden_size, batch_first=True)
-        self.fc = nn.Linear(hidden_size, output_size)
+        self.fc1 = nn.Linear(hidden_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, output_size)
     
     def forward(self, x):
         lstm_out, _ = self.lstm1(x)
         
         # lstm_out,_ = self.lstm2(lstm_out)
-        output= self.fc(lstm_out[:, -1, :])  # 마지막 시간 단계의 출력만 사용
+        output= self.fc1(lstm_out[:, -1, :])  # 마지막 시간 단계의 출력만 사용
+        output = self.fc2(output)
         return output
 
 # 데이터셋과 데이터로더 준비
@@ -100,7 +102,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=16, shuffle=True)
 # 모델, 손실 함수, 최적화기 초기화
 input_size = 1
 hidden_size = 64
-output_size = 1
+output_size = len(word2index)
 model = LSTMTimeSeriesModel(input_size, hidden_size, output_size)
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.01)
