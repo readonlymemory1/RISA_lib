@@ -25,7 +25,7 @@ And learn, too late, they grieved it on its way,
 Do not go gentle into that good night.
 
 Grave men, near death, who see with blinding sight
-Blind eyes could blaze like meteors and be gay,   
+Blind eyes could blaze like meteors and be gay,
 Rage, rage against the dying of the light.
 
 And you, my father, there on the sad height,
@@ -42,10 +42,10 @@ class TrainTool:
         self.data = data.split()
         self.word2index = {word: i for i, word in enumerate(set(self.data))}
         self.index2word = {i: word for word, i in self.word2index.items()}
-    
+
     def i2w(self):
         return self.index2word
-    
+
     def w2i(self):
         return self.word2index
 
@@ -66,7 +66,8 @@ def decoder(x):
 
 data = encoder(sentence_data)
 
-input_seq_length = 5  # 입력 시퀀스 길이
+input_seq_length = 3  # 입력 시퀀스 길이
+
 output_seq_length = 1  # 출력 시퀀스 길이
 
 # 데이터를 입력 시퀀스와 출력 시퀀스로 변환
@@ -84,10 +85,10 @@ sequences = create_sequences(data, input_seq_length, output_seq_length)
 class TimeSeriesDataset(torch.utils.data.Dataset):
     def __init__(self, sequences):
         self.sequences = sequences
-    
+
     def __len__(self):
         return len(self.sequences)
-    
+
     def __getitem__(self, idx):
         input_seq, output_seq = self.sequences[idx]
         return torch.tensor(input_seq, dtype=torch.long), torch.tensor(output_seq, dtype=torch.long)
@@ -96,9 +97,9 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
 class LSTMTimeSeriesModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(LSTMTimeSeriesModel, self).__init__()
-        self.lstm1 = nn.GRU(input_size, hidden_size, batch_first=True)
+        self.lstm1 = nn.LSTM(input_size, hidden_size, batch_first=True)
         self.fc1 = nn.Linear(hidden_size, output_size)
-    
+
     def forward(self, x):
         lstm_out, _ = self.lstm1(x)
         output = self.fc1(lstm_out[:, -1, :])  # 마지막 시간 단계의 출력만 사용
@@ -118,7 +119,7 @@ optimizer = optim.Adam(model.parameters(), lr=0.01)
 loss_item = []
 
 # 모델 훈련
-epochs = 500
+epochs = 100
 for epoch in range(epochs):
     for inputs, targets in dataloader:
         optimizer.zero_grad()
@@ -136,13 +137,13 @@ plt.plot(loss_item)
 plt.show()
 
 # 훈련된 모델로 예측 수행
-a = ["do", "not", "go", "gentle", "into"]
+a = ["do", "not", "go"]
 for i in range(50):
-    
+
     print(a)
-    encoding = tools.encoder(" ".join(a), True)
+    encoding = tools.encoder(" ".join(a))
     print(tools.using_for_decoder(encoding))
-    input_seq = torch.tensor(encoding[len(encoding)-5:], dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
+    input_seq = torch.tensor(encoding[len(a)-5:], dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
     predicted_output = model(input_seq)
     predicted_word_index = torch.argmax(predicted_output, dim=-1).item()
     print("Predicted output:", tools.decoder(predicted_word_index))
