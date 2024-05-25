@@ -8,17 +8,17 @@ import numpy as np
 def find_sentence_similarity(text, target_word):
     # 문장 토큰화
     sentences = sent_tokenize(text)
-    
+
     # TF-IDF 벡터화
     vectorizer = TfidfVectorizer()
     tfidf_matrix = vectorizer.fit_transform(sentences)
-    
+
     # 타겟 단어 벡터화
     target_word_tfidf = vectorizer.transform(target_word)
-    
+
     # 코사인 유사도 계산
     cosine_similarities = cosine_similarity(target_word_tfidf, tfidf_matrix).flatten()
-    
+
     # 유사도와 함께 문장 반환
     sentences_with_similarity = list(zip(sentences, cosine_similarities))
     sentences_with_similarity.sort(key=lambda x: x[1], reverse=True)  # 유사도 기준으로 정렬

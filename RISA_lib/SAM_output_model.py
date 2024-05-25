@@ -66,7 +66,7 @@ def decoder(x):
 
 data = encoder(sentence_data)
 
-input_seq_length = 3  # 입력 시퀀스 길이
+input_seq_length = 5  # 입력 시퀀스 길이
 
 output_seq_length = 1  # 출력 시퀀스 길이
 
@@ -137,15 +137,14 @@ plt.plot(loss_item)
 plt.show()
 
 # 훈련된 모델로 예측 수행
-a = ["do", "not", "go"]
+a = ["do", "not", "go", "gentle", "into"]
 for i in range(50):
 
     print(a)
     encoding = tools.encoder(" ".join(a))
-    print(tools.using_for_decoder(encoding))
+    print(tools.using_for_decoder(encoding, True))
     input_seq = torch.tensor(encoding[len(a)-5:], dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
     predicted_output = model(input_seq)
     predicted_word_index = torch.argmax(predicted_output, dim=-1).item()
-    print("Predicted output:", tools.decoder(predicted_word_index))
     a.append(tools.decoder(predicted_word_index))
 print(' '.join(a))
