@@ -2,13 +2,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from nltk.tokenize import sent_tokenize
-from transformers import pipeline
-# from kss import split_sentences
+# from transformers import pipeline
 import re
+import pandas as pd
 
-# 학습용 데이터 생성
-data = ''''''
+data_file = open("C:/Users/kjh05/OneDrive/문서/GitHub/RISA_lib/RISA_lib/data.data", "r")
+data = data_file.read()
+data_file.close()
 
+data = data.lower()
 data = data.replace("\n", " ")
 data = sent_tokenize(data)
 # data = split_sentences(data)
@@ -96,6 +98,6 @@ def generate(model, start_seq, max_len=20):
     return ' '.join(words)
 
 # 모델을 사용하여 문장 생성
-start_seq = "파이썬"
+start_seq = "ai"
 generated_sentence = generate(model, start_seq)
 print("Generated Sentence:", generated_sentence)
