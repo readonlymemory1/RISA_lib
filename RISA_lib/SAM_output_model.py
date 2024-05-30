@@ -5,32 +5,100 @@ from nltk.tokenize import sent_tokenize
 # from transformers import pipeline
 import re
 import pandas as pd
+from gensim.models import Word2Vec
+from gensim.utils import simple_preprocess, tokenize
+import itertools
+from gensim.parsing.preprocessing import strip_tags, strip_punctuation, strip_multiple_whitespaces, strip_numeric
+
+def custom_preprocess(doc):
+    """
+    텍스트를 소문자로 변환하고, 토큰화하며 2글자 이하의 단어도 포함합니다.
+    """
+    # 태그 제거, 구두점 제거, 다중 공백 제거, 숫자 제거
+    doc = strip_tags(doc)
+    doc = strip_punctuation(doc)
+    doc = strip_multiple_whitespaces(doc)
+    doc = strip_numeric(doc)
+
+    # 소문자로 변환하고 토큰화
+    tokens = list(tokenize(doc, lowercase=True))
+
+    # 여기서는 2글자 이하의 단어도 포함
+    return tokens
+
 
 data_file = open("C:/Users/kjh05/OneDrive/문서/GitHub/RISA_lib/RISA_lib/data.data", "r")
 data = data_file.read()
 data_file.close()
 
+a_h = pd.read_csv("C:/Users/kjh05/OneDrive/문서/GitHub/RISA_lib/RISA_lib/ai_human.csv", names=["ai", "human"])
+# def ai_human(csv, in, out):
+#     csv.loc[csv["ai"]==in, "human"] = out
+
+
+def list_lower(i):
+    for j in range(len(i)):
+        i[j] = i[j].lower()
+    return i
+
+def list_re(i):
+    for j in range(len(i)):
+        i[j] = re.sub(r'[^a-zA-Z ]', "", i[j])
+    return i
+
+d = list(a_h["ai"])
 data = data.lower()
 data = data.replace("\n", " ")
-data = sent_tokenize(data)
+data = sent_tokenize(data)+list_lower(d)
+processed_sentences = [custom_preprocess(sentence) for sentence in data]
+w2v_model = Word2Vec(sentences=processed_sentences, vector_size=100, window=5, min_count=1, workers=4)
 # data = split_sentences(data)
 # for i in range(len(data)):
 #     data[i] = data[i].lower()
-print(data)
+# print(data)
 # 단어 사전 생성
-vocab = set(re.sub(r'[^a-zA-Z ]', "", ' '.join(data)).split())
-word_to_idx = {word: i+1 for i, word in enumerate(vocab)}
-idx_to_word = {i+1: word for i, word in enumerate(vocab)}
+# vocab = set(re.sub(r'[^a-zA-Z ]', "", ' '.join(data)).split())
+sent = list(itertools.chain(*processed_sentences))
+vocab_set = list(set(sent))
+
+print(sent)
+word_to_idx = {word: i+1 for i, word in enumerate(w2v_model.wv.index_to_key)}
+idx_to_word = {i+1: word for i, word in enumerate(w2v_model.wv.index_to_key)}
 word_to_idx["<eos>"] = 0
 idx_to_word[0] = "<eos>"
 vocab_size = len(word_to_idx)
 
 # 문장을 숫자 시퀀스로 변환
 def seq_to_indices(seq):
-    return [word_to_idx[word] for word in seq.split()]
+    # print(seq)
+    # seq = list(itertools.chain(*seq))
+    # return [word_to_idx[word] for word in custom_preprocess(" ".join(seq))]
+    a = []
+    print(seq)
+    for word in list(custom_preprocess(" ".join(seq))):
+        print(word)
+        if word in w2v_model.wv.index_to_key:
+            a.append(word_to_idx[word])
+        else:
+            continue
+
+    return a
 
 # 학습용 데이터셋 생성
-sequences = [seq_to_indices(seq) + [0] for seq in sent_tokenize(re.sub(r"[^a-zA-Z ]",""," ".join(data)))]
+sent_tokenize = sent_tokenize(" ".join(sent))
+print(sent_tokenize)
+sent_tokenize = list_re(sent_tokenize)
+print(sent_tokenize)
+sequences = []
+
+print("data:", data)
+data = [custom_preprocess(d) for d in data]
+print(data)
+for seq in data:
+    sequences.append(seq_to_indices(seq)+[0])
+print(sequences)
+# sequences = [seq_to_indices(seq)+[0] for seq in sent_tokenize]
+# print(sequences)
 # sequences = [seq_to_indices(seq) + [0] for seq in split_sentences(re.sub(r"[^a-zA-Z ]",""," ".join(data)))]  # 각 시퀀스 끝에 <eos> 추가
 input_sequences = [torch.tensor(seq[:-1]) for seq in sequences]
 target_sequences = [torch.tensor(seq[1:]) for seq in sequences]
@@ -98,6 +166,6 @@ def generate(model, start_seq, max_len=20):
     return ' '.join(words)
 
 # 모델을 사용하여 문장 생성
-start_seq = "ai"
+start_seq = "what"
 generated_sentence = generate(model, start_seq)
 print("Generated Sentence:", generated_sentence)
