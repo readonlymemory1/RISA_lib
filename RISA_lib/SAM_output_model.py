@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from nltk.tokenize import sent_tokenize
 # from transformers import pipeline
+from torch.nn import Transformer
 import re
 import pandas as pd
 from gensim.models import Word2Vec
@@ -115,7 +116,7 @@ class LSTMModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers):
         super(LSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers, batch_first=True)
+        self.lstm = Transformer(embedding_dim, hidden_dim, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_dim, vocab_size)
 
     def forward(self, x, hidden):
