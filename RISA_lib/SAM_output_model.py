@@ -58,7 +58,7 @@ w2v_model = Word2Vec(sentences=processed_sentences, vector_size=100, window=5, m
 #     data[i] = data[i].lower()
 # print(data)
 # 단어 사전 생성
-# vocab = set(re.sub(r'[^a-zA-Z ]', "", ' '.join(data)).split())
+# vocab = set(re.sub(r'[^a-zA-Z ]', "", ' '.join(data)).split())mn
 sent = list(itertools.chain(*processed_sentences))
 vocab_set = list(set(sent))
 
@@ -103,6 +103,7 @@ print(sequences)
 # sequences = [seq_to_indices(seq) + [0] for seq in split_sentences(re.sub(r"[^a-zA-Z ]",""," ".join(data)))]  # 각 시퀀스 끝에 <eos> 추가
 input_sequences = [torch.tensor(seq[:-1]) for seq in sequences]
 target_sequences = [torch.tensor(seq[1:]) for seq in sequences]
+first_target_sequences = [torch.tensor(seq[1:]) for seq in sequences]## TODO: 이부분을 답변 첫번째 단어로 바꿔야 함
 
 # 하이퍼파라미터
 embedding_dim = 10
@@ -111,12 +112,27 @@ num_layers = 1
 num_epochs = 100
 learning_rate = 0.01
 
+
+
+class First_token_predict(nn.Module):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers):
+        super(LSTMModel, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, vocab_size)
+
+    def forward(self, x, hidden):
+        embedded = self.embedding(x)
+        output, hidden = self.lstm(embedded, hidden)
+        output = self.fc(output)
+        return output, hidden
+
 # LSTM 모델 정의
 class LSTMModel(nn.Module):
     def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers):
         super(LSTMModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.lstm = Transformer(embedding_dim, hidden_dim, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_dim, vocab_size)
 
     def forward(self, x, hidden):
@@ -147,6 +163,29 @@ for epoch in range(num_epochs):
     if (epoch+1) % 10 == 0:
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
 
+
+ftp = First_token_predict(vocab_size, embedding_dim, hidden_dim, num_layers)
+
+# 손실 함수 및 옵티마이저 정의
+crit = nn.CrossEntropyLoss()
+opti = optim.Adam(ftp.parameters(), lr=learning_rate)
+
+# 모델 학습
+for epoch in range(num_epochs):
+    for input_seq, target_seq in zip(input_sequences, target_sequences):
+        opti.zero_grad()
+        hidden = (torch.zeros(num_layers, 1, hidden_dim),
+                  torch.zeros(num_layers, 1, hidden_dim))
+
+        output, _ = model(input_seq.unsqueeze(0), hidden)
+        loss = crit(output.view(-1, vocab_size), target_seq)
+
+        loss.backward()
+        opti.step()
+
+    if (epoch+1) % 10 == 0:
+        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+
 # 생성 함수 정의
 def generate(model, start_seq, max_len=20):
     with torch.no_grad():
@@ -165,8 +204,25 @@ def generate(model, start_seq, max_len=20):
             input_seq = torch.cat((input_seq, top_word_idx.unsqueeze(0)), dim=1)
 
     return ' '.join(words)
+    def first_generate(model, start_seq, max_len=20):
+        with torch.no_grad():
+            words = start_seq.split()
+            input_seq = torch.tensor([word_to_idx[word] for word in words], dtype=torch.long).unsqueeze(0)
+            hidden = (torch.zeros(num_layers, 1, hidden_dim),
+                      torch.zeros(num_layers, 1, hidden_dim))
+
+            for _ in range(max_len):
+                output, hidden = model(input_seq, hidden)
+                last_word_logits = output[:, -1, :]
+                _, top_word_idx = torch.max(last_word_logits, 1)
+                if top_word_idx.item() == word_to_idx['<eos>']:  # <eos> 토큰을 만나면 종료
+                    break
+                words.append(idx_to_word[top_word_idx.item()])
+                input_seq = torch.cat((input_seq, top_word_idx.unsqueeze(0)), dim=1)
+
+        return ' '.join(words)
 
 # 모델을 사용하여 문장 생성
-start_seq = "what"
+start_seq = "what the"
 generated_sentence = generate(model, start_seq)
 print("Generated Sentence:", generated_sentence)
