@@ -10,6 +10,7 @@ from gensim.models import Word2Vec
 from gensim.utils import simple_preprocess, tokenize
 import itertools
 from gensim.parsing.preprocessing import strip_tags, strip_punctuation, strip_multiple_whitespaces, strip_numeric
+from torch.nn.utils.rnn import pad_sequence #이거로 알아서 잘 해보셈
 
 def custom_preprocess(doc):
     """
@@ -47,7 +48,7 @@ def list_re(i):
         i[j] = re.sub(r'[^a-zA-Z ]', "", i[j])
     return i
 
-d = list(a_h["ai"])
+d = list(a_h["ai"]+a_h["human"])
 data = data.lower()
 data = data.replace("\n", " ")
 data = sent_tokenize(data)+list_lower(d)
@@ -68,7 +69,7 @@ idx_to_word = {i+1: word for i, word in enumerate(w2v_model.wv.index_to_key)}
 word_to_idx["<eos>"] = 0
 idx_to_word[0] = "<eos>"
 vocab_size = len(word_to_idx)
-
+print(idx_to_word)
 # 문장을 숫자 시퀀스로 변환
 def seq_to_indices(seq):
     # print(seq)
@@ -98,25 +99,39 @@ print(data)
 for seq in data:
     sequences.append(seq_to_indices(seq)+[0])
 print(sequences)
+
+test_data = [a_h["ai"][0], a_h["human"][0]]
+print("test_data:", test_data)
+s = []
+
+print("data:", )
+test_data = [custom_preprocess(d) for d in test_data]
+print(data)
+for seq in test_data:
+    s.append(seq_to_indices(seq)+[0])
+print(s)
 # sequences = [seq_to_indices(seq)+[0] for seq in sent_tokenize]
 # print(sequences)
 # sequences = [seq_to_indices(seq) + [0] for seq in split_sentences(re.sub(r"[^a-zA-Z ]",""," ".join(data)))]  # 각 시퀀스 끝에 <eos> 추가
 input_sequences = [torch.tensor(seq[:-1]) for seq in sequences]
 target_sequences = [torch.tensor(seq[1:]) for seq in sequences]
-first_target_sequences = [torch.tensor(seq[1:]) for seq in sequences]## TODO: 이부분을 답변 첫번째 단어로 바꿔야 함
+test_sequences = [torch.tensor(seq) for seq in [s[0]]]
+first_target_sequences = [torch.tensor(seq) for seq in [s[1]]]
+print(test_sequences, first_target_sequences)## TODO: 이부분을 답변 첫번째 단어로 바꿔야 함
+
 
 # 하이퍼파라미터
-embedding_dim = 10
-hidden_dim = 32
+embedding_dim = 50
+hidden_dim = 100
 num_layers = 1
-num_epochs = 100
+num_epochs =100
 learning_rate = 0.01
 
 
 
 class First_token_predict(nn.Module):
     def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers):
-        super(LSTMModel, self).__init__()
+        super(First_token_predict, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_dim, vocab_size)
@@ -164,6 +179,10 @@ for epoch in range(num_epochs):
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
 
 
+inputs = torch.stack(test_sequences)
+targets = torch.stack(first_target_sequences)
+
+
 ftp = First_token_predict(vocab_size, embedding_dim, hidden_dim, num_layers)
 
 # 손실 함수 및 옵티마이저 정의
@@ -171,21 +190,35 @@ crit = nn.CrossEntropyLoss()
 opti = optim.Adam(ftp.parameters(), lr=learning_rate)
 
 # 모델 학습
+# for epoch in range(num_epochs):
+#     for input_seq, target_seq in zip(test_sequences, first_target_sequences):
+#         opti.zero_grad()
+#         hidden = (torch.zeros(num_layers, 1, hidden_dim),
+#                   torch.zeros(num_layers, 1, hidden_dim))
+#
+#         output, _ = model(input_seq.unsqueeze(0), hidden)
+#         loss = crit(output.view(-1, vocab_size), target_seq)
+#
+#         loss.backward()
+#         opti.step()
+#
+#     if (epoch+1) % 10 == 0:
+#         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
 for epoch in range(num_epochs):
-    for input_seq, target_seq in zip(input_sequences, target_sequences):
-        opti.zero_grad()
-        hidden = (torch.zeros(num_layers, 1, hidden_dim),
-                  torch.zeros(num_layers, 1, hidden_dim))
+    hidden = (torch.zeros(num_layers, inputs.size(0), hidden_dim),
+              torch.zeros(num_layers, inputs.size(0), hidden_dim))
+    opti.zero_grad()
+    outputs, hidden = ftp(inputs, hidden)
+    loss = crit(outputs.view(-1, vocab_size), targets.view(-1))
+    loss.backward()
+    opti.step()
 
-        output, _ = model(input_seq.unsqueeze(0), hidden)
-        loss = crit(output.view(-1, vocab_size), target_seq)
-
-        loss.backward()
-        opti.step()
-
+    # 예측된 출력 확인
     if (epoch+1) % 10 == 0:
-        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
-
+        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item()}')
+        # 예측된 출력 출력
+        predicted_outputs = outputs.argmax(dim=-1)
+        print("Predicted Outputs:", predicted_outputs)
 # 생성 함수 정의
 def generate(model, start_seq, max_len=20):
     with torch.no_grad():
@@ -204,25 +237,39 @@ def generate(model, start_seq, max_len=20):
             input_seq = torch.cat((input_seq, top_word_idx.unsqueeze(0)), dim=1)
 
     return ' '.join(words)
-    def first_generate(model, start_seq, max_len=20):
-        with torch.no_grad():
-            words = start_seq.split()
-            input_seq = torch.tensor([word_to_idx[word] for word in words], dtype=torch.long).unsqueeze(0)
-            hidden = (torch.zeros(num_layers, 1, hidden_dim),
-                      torch.zeros(num_layers, 1, hidden_dim))
+# def first_generate(model, start_seq, max_len=1):
+    # with torch.no_grad():
+    #     words = start_seq.split()
+    #     input_seq = torch.tensor([word_to_idx[word] for word in words], dtype=torch.long).unsqueeze(0)
+    #     hidden = (torch.zeros(num_layers, 1, hidden_dim),
+    #               torch.zeros(num_layers, 1, hidden_dim))
+    #
+    #     for _ in range(max_len):
+    #         output, hidden = model(input_seq, hidden)
+    #         last_word_logits = output[:, -1, :]
+    #         _, top_word_idx = torch.max(last_word_logits, 1)
+    #         if top_word_idx.item() == word_to_idx['<eos>']:  # <eos> 토큰을 만나면 종료
+    #             break
+    #         words.append(idx_to_word[top_word_idx.item()])
+    #         input_seq = torch.cat((input_seq, top_word_idx.unsqueeze(0)), dim=1)
 
-            for _ in range(max_len):
-                output, hidden = model(input_seq, hidden)
-                last_word_logits = output[:, -1, :]
-                _, top_word_idx = torch.max(last_word_logits, 1)
-                if top_word_idx.item() == word_to_idx['<eos>']:  # <eos> 토큰을 만나면 종료
-                    break
-                words.append(idx_to_word[top_word_idx.item()])
-                input_seq = torch.cat((input_seq, top_word_idx.unsqueeze(0)), dim=1)
+    return ' '.join(words)
 
-        return ' '.join(words)
-
+def predict_next_sequence(model, input_sequence, hidden):
+    output , hidden= model(torch.tensor(seq_to_indices(input_sequence.split())).unsqueeze(0), hidden)
+    output = output.argmax(dim=-1)
+    return output
+    # model.eval()
+    # with torch.no_grad():
+    #     hidden = (torch.zeros(num_layers, 1, hidden_dim),
+    #               torch.zeros(num_layers, 1, hidden_dim))
+    #     input_sequence = torch.tensor(seq_to_indices(input_sequence.split())).unsqueeze(0)
+    #     output, hidden = model(input_sequence, hidden)
+    #     predicted_token = torch.argmax(output[0, -1]).item()
+    # return predicted_token
 # 모델을 사용하여 문장 생성
-start_seq = "what the"
-generated_sentence = generate(model, start_seq)
-print("Generated Sentence:", generated_sentence)
+start_seq = "what am i"
+generated_sentence = predict_next_sequence(ftp, start_seq, hidden)
+
+# generated_sentence = generate(model, start_seq)
+print("Generated Sentence:", generated_sentence,idx_to_word[generated_sentence.tolist()[0][:][0]])
